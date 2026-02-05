@@ -1,0 +1,44 @@
+{
+  "source": {
+    "title": "Core System",
+    "repo": "NYCU-SDC/core-system-backend",
+    "branch": "main",
+    "commit": "a58327e5a861d8e4bb7ccc75a324ae97caf8c089",
+    "pr_number": "123",
+    "pr_title": "CD cleanup test",
+    "pr_type": "Test",
+    "pr_purpose": "Test CD cleanup workflow"
+  },
+  "method": "cleanup",
+  "metadata": {
+    "project_name": "core-system",
+    "component": "backend",
+    "environment": "stage"
+  },
+  "setup": {
+    "inject_secret": {
+      "enable": false,
+      "project": "core-system",
+      "environment": "snapshot",
+      "secrets": []
+    }
+  },
+  "post": {
+    "setup_domain": {
+      "enable": false,
+      "title": "",
+      "name": "",
+      "value": ""
+    },
+    "cleanup_domain": {
+      "enable": true,
+      "title": "Endpoint",
+      "name": "stage.core-system.sdc.nycu.club",
+      "value": ""
+    },
+    "notify_discord": {
+      "enable": true,
+      "channel": "core-system-activity"
+    }
+  }
+}

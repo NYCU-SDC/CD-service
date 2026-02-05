@@ -1,0 +1,60 @@
+{
+  "source": {
+    "title": "Core System",
+    "repo": "NYCU-SDC/core-system-backend",
+    "branch": "main",
+    "commit": "a58327e5a861d8e4bb7ccc75a324ae97caf8c089",
+    "pr_number": "123",
+    "pr_title": "CD test",
+    "pr_type": "Test",
+    "pr_purpose": "Test CD workflow"
+  },
+  "method": "deploy",
+  "metadata": {
+    "project_name": "core-system",
+    "component": "backend",
+    "environment": "stage"
+  },
+  "setup": {
+    "inject_secret": {
+      "enable": false,
+      "project": "core-system",
+      "environment": "snapshot",
+      "secrets": [
+        {
+          "path": "/",
+          "secret_name": "OAUTH_PROXY_TOKEN",
+          "env_name": "OAUTH_PROXY_TOKEN"
+        },
+        {
+          "path": "/google-oauth",
+          "secret_name": "CLIENT_ID",
+          "env_name": "GOOGLE_OAUTH_CLIENT_ID"
+        },
+        {
+          "path": "/google-oauth",
+          "secret_name": "CLIENT_SECRET",
+          "env_name": "GOOGLE_OAUTH_CLIENT_SECRET"
+        }
+      ]
+    }
+  },
+  "post": {
+    "setup_domain": {
+      "enable": false,
+      "title": "Endpoint",
+      "name": "stage.core-system.sdc.nycu.club",
+      "value": "default-eng-deploy:internal"
+    },
+    "cleanup_domain": {
+      "enable": false,
+      "title": "",
+      "name": "",
+      "value": ""
+    },
+    "notify_discord": {
+      "enable": true,
+      "channel": "core-system-activity"
+    }
+  }
+}
