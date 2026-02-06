@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -14,8 +15,8 @@ import (
 
 // Client implements domain.DNSProvider interface
 type Client struct {
-	apiToken string
-	zoneID   string
+	apiToken   string
+	zoneID     string
 	httpClient *http.Client
 	logger     *zap.Logger
 }
@@ -40,13 +41,13 @@ type DNSRecord struct {
 }
 
 type listDNSRecordsResponse struct {
-	Result []DNSRecord `json:"result"`
-	Success bool       `json:"success"`
+	Result  []DNSRecord `json:"result"`
+	Success bool        `json:"success"`
 }
 
 type createDNSRecordResponse struct {
-	Result DNSRecord `json:"result"`
-	Success bool     `json:"success"`
+	Result  DNSRecord `json:"result"`
+	Success bool      `json:"success"`
 }
 
 // EnsureRecord ensures a DNS A record exists with the given domain and IP
@@ -93,7 +94,7 @@ func (c *Client) RemoveRecord(ctx context.Context, domain string) error {
 
 func (c *Client) findRecord(ctx context.Context, domain string) (*DNSRecord, error) {
 	url := fmt.Sprintf("https://api.cloudflare.com/client/v4/zones/%s/dns_records", c.zoneID)
-	
+
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, err
@@ -108,18 +109,43 @@ func (c *Client) findRecord(ctx context.Context, domain string) (*DNSRecord, err
 	q.Set("name", domain)
 	req.URL.RawQuery = q.Encode()
 
+	// Log request details
+	c.logger.Debug("Sending Cloudflare API request",
+		zap.String("method", "GET"),
+		zap.String("url", req.URL.String()),
+		zap.String("zone_id", c.zoneID),
+		zap.String("domain", domain),
+		zap.String("token_prefix", maskToken(c.apiToken)),
+	)
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		c.logger.Error("Failed to send Cloudflare API request",
+			zap.Error(err),
+			zap.String("url", req.URL.String()),
+		)
 		return nil, err
 	}
 	defer resp.Body.Close()
 
+	// Read response body for logging
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Cloudflare API returned status %d", resp.StatusCode)
+		c.logger.Error("Cloudflare API returned error",
+			zap.Int("status_code", resp.StatusCode),
+			zap.String("url", req.URL.String()),
+			zap.String("response_body", string(bodyBytes)),
+			zap.String("token_prefix", maskToken(c.apiToken)),
+		)
+		return nil, fmt.Errorf("Cloudflare API returned status %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	var apiResponse listDNSRecordsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&apiResponse); err != nil {
+	if err := json.Unmarshal(bodyBytes, &apiResponse); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
@@ -128,15 +154,24 @@ func (c *Client) findRecord(ctx context.Context, domain string) (*DNSRecord, err
 	}
 
 	if len(apiResponse.Result) == 0 {
+		c.logger.Debug("No DNS record found",
+			zap.String("domain", domain),
+		)
 		return nil, nil
 	}
+
+	c.logger.Debug("DNS record found",
+		zap.String("domain", domain),
+		zap.String("record_id", apiResponse.Result[0].ID),
+		zap.String("content", apiResponse.Result[0].Content),
+	)
 
 	return &apiResponse.Result[0], nil
 }
 
 func (c *Client) createRecord(ctx context.Context, domain, ip string) error {
 	url := fmt.Sprintf("https://api.cloudflare.com/client/v4/zones/%s/dns_records", c.zoneID)
-	
+
 	payload := map[string]interface{}{
 		"type":    "A",
 		"name":    domain,
@@ -157,18 +192,41 @@ func (c *Client) createRecord(ctx context.Context, domain, ip string) error {
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiToken))
 	req.Header.Set("Content-Type", "application/json")
 
+	c.logger.Debug("Creating DNS record",
+		zap.String("url", url),
+		zap.String("domain", domain),
+		zap.String("ip", ip),
+		zap.String("token_prefix", maskToken(c.apiToken)),
+	)
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		c.logger.Error("Failed to create DNS record",
+			zap.Error(err),
+			zap.String("domain", domain),
+		)
 		return err
 	}
 	defer resp.Body.Close()
 
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
+
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return fmt.Errorf("Cloudflare API returned status %d", resp.StatusCode)
+		c.logger.Error("Cloudflare API returned error when creating DNS record",
+			zap.Int("status_code", resp.StatusCode),
+			zap.String("domain", domain),
+			zap.String("ip", ip),
+			zap.String("response_body", string(bodyBytes)),
+			zap.String("token_prefix", maskToken(c.apiToken)),
+		)
+		return fmt.Errorf("Cloudflare API returned status %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	var apiResponse createDNSRecordResponse
-	if err := json.NewDecoder(resp.Body).Decode(&apiResponse); err != nil {
+	if err := json.Unmarshal(bodyBytes, &apiResponse); err != nil {
 		return fmt.Errorf("failed to decode response: %w", err)
 	}
 
@@ -186,7 +244,7 @@ func (c *Client) createRecord(ctx context.Context, domain, ip string) error {
 
 func (c *Client) updateRecord(ctx context.Context, recordID, domain, ip string) error {
 	url := fmt.Sprintf("https://api.cloudflare.com/client/v4/zones/%s/dns_records/%s", c.zoneID, recordID)
-	
+
 	payload := map[string]interface{}{
 		"type":    "A",
 		"name":    domain,
@@ -207,18 +265,42 @@ func (c *Client) updateRecord(ctx context.Context, recordID, domain, ip string) 
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiToken))
 	req.Header.Set("Content-Type", "application/json")
 
+	c.logger.Debug("Updating DNS record",
+		zap.String("url", url),
+		zap.String("record_id", recordID),
+		zap.String("domain", domain),
+		zap.String("ip", ip),
+		zap.String("token_prefix", maskToken(c.apiToken)),
+	)
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		c.logger.Error("Failed to update DNS record",
+			zap.Error(err),
+			zap.String("record_id", recordID),
+		)
 		return err
 	}
 	defer resp.Body.Close()
 
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
+
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("Cloudflare API returned status %d", resp.StatusCode)
+		c.logger.Error("Cloudflare API returned error when updating DNS record",
+			zap.Int("status_code", resp.StatusCode),
+			zap.String("record_id", recordID),
+			zap.String("domain", domain),
+			zap.String("response_body", string(bodyBytes)),
+			zap.String("token_prefix", maskToken(c.apiToken)),
+		)
+		return fmt.Errorf("Cloudflare API returned status %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	var apiResponse createDNSRecordResponse
-	if err := json.NewDecoder(resp.Body).Decode(&apiResponse); err != nil {
+	if err := json.Unmarshal(bodyBytes, &apiResponse); err != nil {
 		return fmt.Errorf("failed to decode response: %w", err)
 	}
 
@@ -236,7 +318,7 @@ func (c *Client) updateRecord(ctx context.Context, recordID, domain, ip string) 
 
 func (c *Client) deleteRecord(ctx context.Context, recordID string) error {
 	url := fmt.Sprintf("https://api.cloudflare.com/client/v4/zones/%s/dns_records/%s", c.zoneID, recordID)
-	
+
 	req, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {
 		return err
@@ -245,20 +327,41 @@ func (c *Client) deleteRecord(ctx context.Context, recordID string) error {
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiToken))
 	req.Header.Set("Content-Type", "application/json")
 
+	c.logger.Debug("Deleting DNS record",
+		zap.String("url", url),
+		zap.String("record_id", recordID),
+		zap.String("token_prefix", maskToken(c.apiToken)),
+	)
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		c.logger.Error("Failed to delete DNS record",
+			zap.Error(err),
+			zap.String("record_id", recordID),
+		)
 		return err
 	}
 	defer resp.Body.Close()
 
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
+
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("Cloudflare API returned status %d", resp.StatusCode)
+		c.logger.Error("Cloudflare API returned error when deleting DNS record",
+			zap.Int("status_code", resp.StatusCode),
+			zap.String("record_id", recordID),
+			zap.String("response_body", string(bodyBytes)),
+			zap.String("token_prefix", maskToken(c.apiToken)),
+		)
+		return fmt.Errorf("Cloudflare API returned status %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	var apiResponse struct {
 		Success bool `json:"success"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&apiResponse); err != nil {
+	if err := json.Unmarshal(bodyBytes, &apiResponse); err != nil {
 		return fmt.Errorf("failed to decode response: %w", err)
 	}
 
@@ -271,6 +374,14 @@ func (c *Client) deleteRecord(ctx context.Context, recordID string) error {
 	)
 
 	return nil
+}
+
+// maskToken masks the token for logging (shows first 8 and last 4 characters)
+func maskToken(token string) string {
+	if len(token) <= 12 {
+		return "***"
+	}
+	return token[:8] + "..." + token[len(token)-4:]
 }
 
 // Ensure Client implements domain.DNSProvider

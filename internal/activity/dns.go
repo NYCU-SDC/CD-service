@@ -2,6 +2,7 @@ package activity
 
 import (
 	"NYCU-SDC/deployment-service/internal/domain"
+	"NYCU-SDC/deployment-service/internal/resolver"
 	"context"
 
 	"go.temporal.io/sdk/activity"
@@ -11,22 +12,39 @@ import (
 // DNSActivity handles DNS-related activities
 type DNSActivity struct {
 	dnsProvider domain.DNSProvider
+	ipResolver  *resolver.IPResolver
 	logger      *zap.Logger
 }
 
 // NewDNSActivity creates a new DNS activity
-func NewDNSActivity(dnsProvider domain.DNSProvider, logger *zap.Logger) *DNSActivity {
+func NewDNSActivity(dnsProvider domain.DNSProvider, ipResolver *resolver.IPResolver, logger *zap.Logger) *DNSActivity {
 	return &DNSActivity{
 		dnsProvider: dnsProvider,
+		ipResolver:  ipResolver,
 		logger:      logger,
 	}
 }
 
 // EnsureDNSRecord ensures a DNS A record exists
-func (a *DNSActivity) EnsureDNSRecord(ctx context.Context, domain, ip string) error {
+func (a *DNSActivity) EnsureDNSRecord(ctx context.Context, domain, ipPlaceholder string) error {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Ensuring DNS record",
 		zap.String("domain", domain),
+		zap.String("ip_placeholder", ipPlaceholder),
+	)
+
+	// Resolve IP placeholder to actual IP address
+	ip, err := a.ipResolver.Resolve(ipPlaceholder)
+	if err != nil {
+		logger.Error("Failed to resolve IP placeholder",
+			zap.Error(err),
+			zap.String("placeholder", ipPlaceholder),
+		)
+		return err
+	}
+
+	logger.Info("Resolved IP placeholder",
+		zap.String("placeholder", ipPlaceholder),
 		zap.String("ip", ip),
 	)
 

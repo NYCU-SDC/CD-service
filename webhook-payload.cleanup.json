@@ -24,12 +24,6 @@
     }
   },
   "post": {
-    "setup_domain": {
-      "enable": false,
-      "title": "",
-      "name": "",
-      "value": ""
-    },
     "cleanup_domain": {
       "enable": true,
       "title": "Endpoint",

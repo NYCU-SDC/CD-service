@@ -21,14 +21,20 @@ infisical:
   project_id: ""
   environment: "dev"
 
+# Discord notification configuration
+discord:
+  webhook_url: ""
+
 # Cloudflare configuration
 cloudflare:
   api_token: ""
   zone_id: ""
 
-# Discord notification configuration
-discord:
-  webhook_url: ""
+
+# IP address mappings for DNS configuration
+ip_mappings:
+  default-eng-deploy:internal: "10.1.252.101"
+  default-eng-deploy:external: "140.113.215.249"
 
 # OpenTelemetry configuration
 otel:

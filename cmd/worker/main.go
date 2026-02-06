@@ -8,6 +8,7 @@ import (
 	"NYCU-SDC/deployment-service/internal/adapter/ssh"
 	"NYCU-SDC/deployment-service/internal/config"
 	"NYCU-SDC/deployment-service/internal/logger"
+	"NYCU-SDC/deployment-service/internal/resolver"
 	"NYCU-SDC/deployment-service/internal/workflow"
 	"context"
 	"fmt"
@@ -89,10 +90,13 @@ func main() {
 	cloudflareClient := cloudflare.NewClient(cfg.Cloudflare.APIToken, cfg.Cloudflare.ZoneID, zapLogger)
 	discordClient := discord.NewClient(cfg.Discord.WebhookURL, zapLogger)
 
+	// Create resolvers
+	ipResolver := resolver.NewIPResolver(cfg.IPMappings, zapLogger)
+
 	// Create activities
 	secretActivity := activity.NewSecretActivity(infisicalClient, zapLogger)
 	sshActivity := activity.NewSSHActivity(sshClient, cfg.SSH, zapLogger)
-	dnsActivity := activity.NewDNSActivity(cloudflareClient, zapLogger)
+	dnsActivity := activity.NewDNSActivity(cloudflareClient, ipResolver, zapLogger)
 	notifyActivity := activity.NewNotifyActivity(discordClient, zapLogger)
 
 	// Create worker

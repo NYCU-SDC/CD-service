@@ -11,15 +11,16 @@ import (
 )
 
 type Config struct {
-	Server     ServerConfig     `yaml:"server"`
-	Temporal   TemporalConfig   `yaml:"temporal"`
-	Auth       AuthConfig       `yaml:"auth"`
-	Infisical  InfisicalConfig  `yaml:"infisical"`
-	Cloudflare CloudflareConfig `yaml:"cloudflare"`
-	Discord    DiscordConfig    `yaml:"discord"`
-	OTEL       OTELConfig       `yaml:"otel"`
-	Logger     LoggerConfig     `yaml:"logger"`
-	SSH        SSHConfig        `yaml:"ssh"`
+	Server     ServerConfig      `yaml:"server"`
+	Temporal   TemporalConfig    `yaml:"temporal"`
+	Auth       AuthConfig        `yaml:"auth"`
+	Infisical  InfisicalConfig   `yaml:"infisical"`
+	Cloudflare CloudflareConfig  `yaml:"cloudflare"`
+	Discord    DiscordConfig     `yaml:"discord"`
+	IPMappings map[string]string `yaml:"ip_mappings"`
+	OTEL       OTELConfig        `yaml:"otel"`
+	Logger     LoggerConfig      `yaml:"logger"`
+	SSH        SSHConfig         `yaml:"ssh"`
 }
 
 type ServerConfig struct {
@@ -167,6 +168,9 @@ func loadFromFile(filePath string, config *Config) error {
 	}
 	if fileConfig.Discord.WebhookURL != "" {
 		config.Discord.WebhookURL = fileConfig.Discord.WebhookURL
+	}
+	if len(fileConfig.IPMappings) > 0 {
+		config.IPMappings = fileConfig.IPMappings
 	}
 	if fileConfig.OTEL.CollectorURL != "" {
 		config.OTEL.CollectorURL = fileConfig.OTEL.CollectorURL
