@@ -40,8 +40,6 @@ type AuthConfig struct {
 type InfisicalConfig struct {
 	BaseURL      string `yaml:"base_url" envconfig:"INFISICAL_BASE_URL"`
 	ServiceToken string `yaml:"service_token" envconfig:"INFISICAL_SERVICE_TOKEN"`
-	ProjectID    string `yaml:"project_id" envconfig:"INFISICAL_PROJECT_ID"`
-	Environment  string `yaml:"environment" envconfig:"INFISICAL_ENVIRONMENT"`
 }
 
 type CloudflareConfig struct {
@@ -154,12 +152,6 @@ func loadFromFile(filePath string, config *Config) error {
 	if fileConfig.Infisical.ServiceToken != "" {
 		config.Infisical.ServiceToken = fileConfig.Infisical.ServiceToken
 	}
-	if fileConfig.Infisical.ProjectID != "" {
-		config.Infisical.ProjectID = fileConfig.Infisical.ProjectID
-	}
-	if fileConfig.Infisical.Environment != "" {
-		config.Infisical.Environment = fileConfig.Infisical.Environment
-	}
 	if fileConfig.Cloudflare.APIToken != "" {
 		config.Cloudflare.APIToken = fileConfig.Cloudflare.APIToken
 	}
@@ -229,12 +221,6 @@ func loadFromEnv(config *Config) {
 	}
 	if serviceToken := os.Getenv("INFISICAL_SERVICE_TOKEN"); serviceToken != "" {
 		config.Infisical.ServiceToken = serviceToken
-	}
-	if projectID := os.Getenv("INFISICAL_PROJECT_ID"); projectID != "" {
-		config.Infisical.ProjectID = projectID
-	}
-	if environment := os.Getenv("INFISICAL_ENVIRONMENT"); environment != "" {
-		config.Infisical.Environment = environment
 	}
 	if apiToken := os.Getenv("CLOUDFLARE_API_TOKEN"); apiToken != "" {
 		config.Cloudflare.APIToken = apiToken

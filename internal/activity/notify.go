@@ -24,15 +24,16 @@ func NewNotifyActivity(notifier domain.Notifier, logger *zap.Logger) *NotifyActi
 }
 
 // SendDiscordNotification sends a Discord notification
-func (a *NotifyActivity) SendDiscordNotification(ctx context.Context, req domain.DeployRequest, status string, err error) error {
+// errMsg should be nil or empty string for success, or contain the error message for failures
+func (a *NotifyActivity) SendDiscordNotification(ctx context.Context, req domain.DeployRequest, status string, errMsg *string) error {
 	logger := activity.GetLogger(ctx)
 
-	success := err == nil
+	success := errMsg == nil || *errMsg == ""
 	title := fmt.Sprintf("Deployment %s", status)
 	message := fmt.Sprintf("Deployment %s for %s", status, req.Metadata.ProjectName)
 
-	if err != nil {
-		message = fmt.Sprintf("%s\nError: %v", message, err)
+	if errMsg != nil && *errMsg != "" {
+		message = fmt.Sprintf("%s\nError: %s", message, *errMsg)
 	}
 
 	metadata := map[string]string{

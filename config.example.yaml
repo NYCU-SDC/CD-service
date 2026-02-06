@@ -18,8 +18,6 @@ auth:
 infisical:
   base_url: "https://infisical.sdc.nycu.club/"
   service_token: ""
-  project_id: ""
-  environment: "dev"
 
 # Discord notification configuration
 discord:

@@ -43,7 +43,8 @@ func CDWorkflow(ctx workflow.Context, req domain.DeployRequest) error {
 		if err != nil {
 			logger.Error("Failed to fetch secrets", "error", err)
 			// Send failure notification
-			if notifyErr := workflow.ExecuteActivity(ctx, activity.ActivitySendDiscordNotification, req, "Failed to fetch secrets", err).Get(ctx, nil); notifyErr != nil {
+			errMsg := err.Error()
+			if notifyErr := workflow.ExecuteActivity(ctx, activity.ActivitySendDiscordNotification, req, "Failed to fetch secrets", &errMsg).Get(ctx, nil); notifyErr != nil {
 				logger.Error("Failed to send failure notification", "error", notifyErr)
 			}
 			return err
@@ -57,7 +58,8 @@ func CDWorkflow(ctx workflow.Context, req domain.DeployRequest) error {
 	if err != nil {
 		logger.Error("SSH deployment failed", "error", err)
 		// Send failure notification
-		if notifyErr := workflow.ExecuteActivity(ctx, activity.ActivitySendDiscordNotification, req, "Deployment Failed", err).Get(ctx, nil); notifyErr != nil {
+		errMsg := err.Error()
+		if notifyErr := workflow.ExecuteActivity(ctx, activity.ActivitySendDiscordNotification, req, "Deployment Failed", &errMsg).Get(ctx, nil); notifyErr != nil {
 			logger.Error("Failed to send failure notification", "error", notifyErr)
 		}
 		return err
@@ -80,8 +82,14 @@ func CDWorkflow(ctx workflow.Context, req domain.DeployRequest) error {
 			).Get(ctx, nil)
 			if err != nil {
 				logger.Error("Failed to setup DNS record", "error", err)
-				// Don't fail the workflow if DNS setup fails, but log it
+				// Send failure notification
+				errMsg := err.Error()
+				if notifyErr := workflow.ExecuteActivity(ctx, activity.ActivitySendDiscordNotification, req, "Deployment Failed", &errMsg).Get(ctx, nil); notifyErr != nil {
+					logger.Error("Failed to send failure notification", "error", notifyErr)
+				}
+				return err
 			}
+
 		}
 	} else if req.Method == domain.MethodCleanup && req.Post.CleanupDomain.Enable {
 		if req.Post.CleanupDomain.Name != "" {
@@ -89,7 +97,12 @@ func CDWorkflow(ctx workflow.Context, req domain.DeployRequest) error {
 			err := workflow.ExecuteActivity(ctx, activity.ActivityRemoveDNSRecord, req.Post.CleanupDomain.Name).Get(ctx, nil)
 			if err != nil {
 				logger.Error("Failed to cleanup DNS record", "error", err)
-				// Don't fail the workflow if DNS cleanup fails, but log it
+				// Send failure notification
+				errMsg := err.Error()
+				if notifyErr := workflow.ExecuteActivity(ctx, activity.ActivitySendDiscordNotification, req, "Deployment Failed", &errMsg).Get(ctx, nil); notifyErr != nil {
+					logger.Error("Failed to send failure notification", "error", notifyErr)
+				}
+				return err
 			}
 		}
 	}
@@ -97,7 +110,7 @@ func CDWorkflow(ctx workflow.Context, req domain.DeployRequest) error {
 	// Step 4: Send success notification
 	if req.Post.NotifyDiscord.Enable {
 		logger.Info("Sending success notification")
-		if err := workflow.ExecuteActivity(ctx, activity.ActivitySendDiscordNotification, req, "Deployment Successful", nil).Get(ctx, nil); err != nil {
+		if err := workflow.ExecuteActivity(ctx, activity.ActivitySendDiscordNotification, req, "Deployment Successful", (*string)(nil)).Get(ctx, nil); err != nil {
 			logger.Error("Failed to send success notification", "error", err)
 			// Don't fail the workflow if notification fails, but log it
 		}

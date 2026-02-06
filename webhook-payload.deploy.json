@@ -17,7 +17,7 @@
   },
   "setup": {
     "inject_secret": {
-      "enable": false,
+      "enable": true,
       "project": "core-system",
       "environment": "snapshot",
       "secrets": [
